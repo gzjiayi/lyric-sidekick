@@ -1,0 +1,13 @@
+{
+  "name": "lyric-sidekick",
+  "version": "1.0.0",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "author": "Grace",
+  "license": "MIT",
+  "dependencies": {
+    "electron": "^36.5.0"
+  }
+}
