@@ -1,5 +1,5 @@
 {
-  "name": "lyric-sidekick",
+  "name": "lyric-sidekick-frontend",
   "version": "1.0.0",
   "main": "main.js",
   "scripts": {
@@ -8,10 +8,6 @@
   "author": "Grace",
   "license": "MIT",
   "dependencies": {
-    "axios": "^1.11.0",
-    "cookie-parser": "^1.4.7",
-    "dotenv": "^17.2.1",
-    "electron": "^36.5.0",
-    "express": "^5.1.0"
+    "electron": "^36.5.0"
   }
 }

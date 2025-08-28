@@ -4,17 +4,26 @@
     <meta charset="UTF-8" />
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self'"
+      content="
+        default-src 'self';
+        script-src 'self';
+        style-src 'self' 'unsafe-inline';
+        img-src 'self' data:;
+        connect-src 'self' http://127.0.0.1:8888 https://accounts.spotify.com;
+        base-uri 'self';
+        form-action 'self';
+      "
     />
     <title>Lyric Sidekick</title>
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
     <div id="app">
+      <button id="login-btn">Login</button>
       <h1 id="song-info">Loading song…</h1>
       <div id="lyrics">Fetching lyrics...</div>
       <!-- <img id="character" src="assets/corgi.jpg" alt="Character" /> -->
     </div>
-    <script src="renderer.js"></script>
+    <script type="module" src="renderer.js"></script>
   </body>
 </html>
