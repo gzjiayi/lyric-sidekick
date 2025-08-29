@@ -18,12 +18,55 @@ app.use(express.json());
 
 const authStore = new Map(); // state -> { code_verifier, tokens: null | {access_token, ...} }
 
-function getAccessTokenOrThrow() {
+async function getAccessTokenOrThrow() {
   const t = app.locals.tokens;
   if (!t?.access_token) {
     throw new Error("No access token. User must log in first.");
   }
-  return t.access_token;
+
+  const expiresAt = t.expires_at;
+  if (Date.now() >= expiresAt) {
+    // token expired, refresh it
+    await refreshAccessToken();
+  }
+
+  return app.locals.tokens.access_token;
+}
+
+async function refreshAccessToken() {
+  try {
+    const refreshToken = app.locals.tokens?.refresh_token;
+    if (!refreshToken) throw new Error("No refresh token available");
+
+    const response = await axios.post(
+      "https://accounts.spotify.com/api/token",
+      new URLSearchParams({
+        grant_type: "refresh_token",
+        refresh_token: refreshToken,
+        client_id: CLIENT_ID,
+      }),
+      {
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+      }
+    );
+
+    const data = response.data;
+    // If refresh successful, update access token and expiration time
+    app.locals.tokens.access_token = data.access_token;
+    app.locals.tokens.expires_at = Date.now() + data.expires_in * 1000 - 60_000;
+
+    // Update refresh token if a new one is returned
+    if (data.refresh_token) {
+      app.locals.tokens.refresh_token = response.refresh_token;
+    }
+  } catch (err) {
+    console.error(
+      "Failed to refresh access token:",
+      err.response?.data || err.message
+    );
+  }
 }
 
 app.get("/", (req, res) => {
@@ -38,7 +81,7 @@ app.post("/store-code-verifier", (req, res) => {
     return res.status(400).send("Missing state or code_verifier");
   }
 
-  authStore.set(state, { code_verifier, tokens: null });
+  authStore.set(state, code_verifier);
   res.sendStatus(200);
 });
 
@@ -47,8 +90,7 @@ app.get("/callback", async (req, res) => {
   const { code, state } = req.query;
 
   // look up the original code_verifier
-  const entry = authStore.get(state);
-  const code_verifier = entry?.code_verifier;
+  const code_verifier = authStore.get(state);
   if (!code || !state || !code_verifier) {
     return res.status(400).send("Missing code, state, or code verifier");
   }
@@ -75,15 +117,6 @@ app.get("/callback", async (req, res) => {
 
     const { access_token, token_type, scope, expires_in, refresh_token } =
       tokenRes.data;
-
-    entry.tokens = {
-      access_token,
-      refresh_token,
-      expires_at: Date.now() + expires_in * 1000 - 60_000,
-      scope,
-      token_type,
-    };
-    authStore.set(state, { tokens: entry.tokens });
 
     app.locals.tokens = {
       access_token,
@@ -132,7 +165,7 @@ app.get("/auth-status", (req, res) => {
 
 async function getCurrentlyPlaying() {
   try {
-    const accessToken = getAccessTokenOrThrow();
+    const accessToken = await getAccessTokenOrThrow();
     const response = await axios.get(
       `${SPOTIFY_API}/me/player/currently-playing`,
       {
