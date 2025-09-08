@@ -1,4 +1,5 @@
 import { startSpotifyLogin } from "./modules/spotify-auth.js";
+import { getNowPlaying } from "./modules/spotify-api.js";
 import { initLyricsDisplay } from "./modules/lyrics-display.js";
 
 document
