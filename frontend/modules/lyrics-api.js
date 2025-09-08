@@ -54,6 +54,49 @@ export async function fetchLyrics(track, artist, album, durationInSec) {
     return null;
   }
 }
+
+// Takes the LRC string (timestamped lyrics) and
+// Outputs an array of objects, each { time: number, text: string }
 export function parseLRC(lrcText) {
-  // turn .lrc text into [{ time, text }]
+  if (!lrcText || typeof lrcText !== "string") return [];
+
+  // split into lines
+  const lines = lrcText.split(/\r?\n/);
+  const metaLineRegex = /^\s*\[(ti|ar|al|by|offset):/i;
+  const timestampRegex = /\[(\d{1,2}):(\d{2})(?:\.(\d{1,2}))?\]/g;
+  const out = [];
+
+  for (const line of lines) {
+    // skip metadata
+    if (metaLineRegex.test(line)) continue;
+
+    // get all the timestamps on this line
+    const timestamps = [...line.matchAll(timestampRegex)];
+    if (timestamps.length === 0) continue;
+
+    // extract the lyric text
+    const text = line.replace(/\[[^\]]*\]/g, "").trim();
+    if (!text) continue;
+
+    // convert timestamps into time
+    for (const m of timestamps) {
+      // each const m is an array of matches
+      // m[0] = full timestamp match e.x. "[01:20.73]"
+      // m[1] = minutes, m[2] = seconds, m[3] = fractional part (or undefined)
+
+      const mm = parseInt(m[1], 10) || 0; // convert minutes to integer
+      const ss = parseInt(m[2], 10) || 0; // convert seconds to integer
+      const frac = m[3] ? Number(`0.${m[3]}`) : 0; // turn it into decimal
+      const time = mm * 60 + ss + frac; // convert total to seconds
+
+      if (Number.isFinite(time)) out.push({ time, text }); // push to output array
+    }
+  }
+
+  // Sort by time ascending
+  // if a.time < b.time -> result is negative -> a comes before b
+  // if a.time > b.time -> result is positive -> b comes before a
+  // if equal, result is 0 -> keep original order
+  out.sort((a, b) => a.time - b.time);
+  return out;
 }
