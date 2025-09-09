@@ -128,6 +128,11 @@ ipcMain.on("open-external", (_event, url) => {
   }
 });
 
+// Send an IPC message from main to renderer via the "lyrics:update" channel,
+// passing { lines, activeIndex } as the payload
+overlayWindow.webContents.send("lyrics:update", { lines, activeIndex });
+overlayWindow.webContents.send("overlay:status", "Fetching lyrics…");
+
 // App init
 async function initApp() {
   // check tokens

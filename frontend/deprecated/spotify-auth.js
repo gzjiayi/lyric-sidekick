@@ -1,4 +1,8 @@
-import { generateRandomString, sha256, base64encode } from "./utils.js";
+import {
+  generateRandomString,
+  sha256,
+  base64encode,
+} from "./utils.js";
 
 export async function startSpotifyLogin() {
   try {

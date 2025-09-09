@@ -1,11 +1,13 @@
-import { initAuthFlow } from "./modules/spotify-auth.js";
-import { initLyricsDisplay } from "./modules/lyrics-display.js";
-
-(async () => {
-  const tokens = await initAuthFlow();
-  if (tokens) {
-    initLyricsDisplay();
+window.electronAPI.onLyricsUpdate((lyricsData) => {
+  const lyricEl = document.getElementById("lyric");
+  if (lyricsData?.lines && lyricsData.lines.length > 0) {
+    const { lines, activeIndex } = lyricsData; // destructure
+    lyricEl.textContent = lines[activeIndex]?.text || "";
   } else {
-    console.warn("Not authenticated");
+    lyricEl.textContent = "";
   }
-})();
+});
+
+window.electronAPI.onStatus((status_message) => {
+  document.getElementById("status").textContent = status_message || "";
+});
