@@ -18,7 +18,8 @@ export async function startSpotifyLogin() {
     // build Spotify authorize URL
     const clientId = "787d1aaa5ee34bbfa8631bab9355aa2a";
     const redirectUri = "http://127.0.0.1:8888/callback";
-    const scope = "user-read-private user-read-email user-read-playback-state";
+    const scope =
+      "user-read-private user-read-email user-read-currently-playing user-read-playback-state ";
 
     const authUrl = new URL("https://accounts.spotify.com/authorize");
     // request user authorization query params
@@ -34,7 +35,7 @@ export async function startSpotifyLogin() {
     };
     authUrl.search = new URLSearchParams(params).toString(); // append the parameters to the authURL
 
-    // Open Spotify login:
+    // Open Spotify login on system browser:
     // - In Electron → use system browser via electronAPI.openExternal
     // - In normal web → fallback to redirecting current window
     if (window.electronAPI?.openExternal) {
@@ -43,32 +44,61 @@ export async function startSpotifyLogin() {
       window.location.href = authUrl.toString();
     }
 
-    const ok = await pollAuth(state);
-    if (ok) {
-      console.log("User successfully authenticated!");
-    } else {
-      console.warn("Login timed out.");
-    }
+    // wait until /tokens returns 200
+    const tokens = await pollAuth(60, 1000); // 60 tries, 1s interval
+    return tokens || null;
   } catch (err) {
-    console.error("Login failed:", err);
+    console.error("startSpotifyLogin failed:", err);
+    return null;
   }
 }
 
-export async function pollAuth(state) {
-  const url = `http://127.0.0.1:8888/auth-status?state=${encodeURIComponent(
-    state
-  )}`;
-  for (let i = 0; i < 60; i++) {
-    const r = await fetch(url);
-    if (!r.ok) {
-      const txt = await r.text();
-      console.warn(`auth-status ${r.status}: ${txt.slice(0, 200)}`);
-      await new Promise((res) => setTimeout(res, 1000));
-      continue;
+// Polls the backend /tokens endpoint until tokens are available
+// Returns token object on success, or false if times out
+export async function pollAuth(maxTries = 60, intervalMs = 1000) {
+  for (let i = 0; i < maxTries; i++) {
+    try {
+      const res = await fetch("http://127.0.0.1:8888/tokens");
+
+      if (res.status === 200) {
+        const tokens = await res.json();
+        return tokens; // success!
+      }
+
+      if (res.status === 404) {
+        // wait and retry
+        await new Promise((resolve) => setTimeout(resolve, intervalMs));
+        continue;
+      }
+
+      console.warn(`pollAuth: unexpected status ${res.status}`);
+      return false;
+    } catch (err) {
+      console.error("pollAuth: fetch error", err);
+      return false;
     }
-    const { authenticated } = await r.json();
-    if (authenticated) return true;
-    await new Promise((res) => setTimeout(res, 1000));
   }
-  return false;
+  return false; // give up after max tries
+}
+
+export async function initAuthFlow() {
+  try {
+    const res = await fetch("http://127.0.0.1:8888/tokens");
+    if (res.ok) {
+      const data = await res.json();
+      return data; // tokens
+    }
+
+    if (res.status === 404) {
+      // no tokens yet, trigger the OAuth and wait for tokens
+      const tokens = await startSpotifyLogin(); // returns tokens or null
+      return tokens;
+    }
+
+    console.warn("initAuthFlow: unexpected status", res.status);
+    return null;
+  } catch (err) {
+    console.error("initAuthFlow failed:", err);
+    return null;
+  }
 }

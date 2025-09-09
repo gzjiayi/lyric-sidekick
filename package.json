@@ -2,9 +2,10 @@
   "name": "lyric-sidekick-frontend",
   "version": "1.0.0",
   "type": "module",
-  "main": "main.js",
+  "main": "main.cjs",
   "scripts": {
-    "start": "electron ."
+    "start": "electron .",
+    "server": "node auth-server.cjs"
   },
   "author": "Grace",
   "license": "MIT",

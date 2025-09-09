@@ -10,7 +10,7 @@ const createWindow = () => {
       nodeIntegration: false,
       contextIsolation: true,
       sandbox: true,
-      preload: path.join(__dirname, "preload.js"),
+      preload: path.join(__dirname, "preload.cjs"),
     },
   });
 
@@ -27,8 +27,8 @@ const createWindow = () => {
 // IPC bridge: renderer -> main to open system browser
 ipcMain.on("open-external", (_event, url) => {
   try {
-    new URL(url);             // basic validation
-    shell.openExternal(url);  // opens default system browser
+    new URL(url); // basic validation
+    shell.openExternal(url); // opens default system browser
   } catch (e) {
     console.error("Invalid URL for open-external:", url);
   }

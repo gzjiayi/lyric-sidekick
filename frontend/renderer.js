@@ -1,9 +1,11 @@
-import { startSpotifyLogin } from "./modules/spotify-auth.js";
-import { getNowPlaying } from "./modules/spotify-api.js";
+import { initAuthFlow } from "./modules/spotify-auth.js";
 import { initLyricsDisplay } from "./modules/lyrics-display.js";
 
-document
-  .getElementById("login-btn")
-  ?.addEventListener("click", startSpotifyLogin);
-
-initLyricsDisplay();
+(async () => {
+  const tokens = await initAuthFlow();
+  if (tokens) {
+    initLyricsDisplay();
+  } else {
+    console.warn("Not authenticated");
+  }
+})();

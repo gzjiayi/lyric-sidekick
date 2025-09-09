@@ -59,7 +59,7 @@ async function refreshAccessToken() {
 
     // Update refresh token if a new one is returned
     if (data.refresh_token) {
-      app.locals.tokens.refresh_token = response.refresh_token;
+      app.locals.tokens.refresh_token = data.refresh_token;
     }
   } catch (err) {
     console.error(
@@ -125,6 +125,7 @@ app.get("/callback", async (req, res) => {
       scope,
       token_type,
     };
+    authStore.delete(state);
 
     res.status(200).send(`
       <!doctype html>
@@ -156,11 +157,6 @@ app.get("/tokens", (req, res) => {
     return res.status(404).json({ error: "Tokens not found" });
   }
   res.json(app.locals.tokens);
-});
-
-app.get("/auth-status", (req, res) => {
-  const entry = authStore.get(req.query.state);
-  res.json({ authenticated: !!(entry && entry.tokens) });
 });
 
 async function getCurrentlyPlaying() {
