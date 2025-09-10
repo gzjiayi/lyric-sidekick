@@ -1,7 +1,7 @@
 const { app, BrowserWindow, ipcMain, shell } = require("electron");
 const path = require("path");
 const crypto = require("crypto");
-const { fetchLyrics, parseLRC } = require("./lyrics-api");
+const { fetchLyrics, parseLRC } = require("./lyrics-api.cjs");
 
 const fetch =
   global.fetch ||
@@ -197,6 +197,84 @@ function getActiveIndex(lines, progressMs) {
     i++;
   }
   return i;
+}
+
+// Keeps overlay synced to Spotify
+async function startPlaybackLoop() {
+  async function tick() {
+    // 1. Check what's playing
+    try {
+      const res = await fetch(BACKEND + "/api/now-playing");
+      if (res.status === 204 || res.status === 404) {
+        overlayWindow?.webContents.send(
+          "status:update",
+          "Waiting for playback"
+        );
+        overlayWindow?.webContents.send("lyrics:update", {
+          lines: [],
+          activeIndex: -1,
+        }); // send blank lyrics
+        return;
+      }
+
+      if (res.status === 401) {
+        // bad or expired token, ned to reauthenticate user
+        overlayWindow?.webContents.send("status:update", "Reconnecting...");
+        await startSpotifyLoginHeadless();
+        return;
+      }
+
+      if (!res.ok) {
+        return;
+      }
+
+      const data = await res.json();
+      const item = data.item;
+      const trackId = item?.id;
+      if (!trackId) {
+        // 200 OK but nothing playing yet
+        overlayWindow?.webContents.send(
+          "status:update",
+          "Waiting for playback"
+        );
+        overlayWindow?.webContents.send("lyrics:update", {
+          lines: [],
+          activeIndex: -1,
+        });
+        return;
+      }
+      const progressMs = data.progress_ms ?? 0;
+      const isPlaying = data.is_playing;
+      const title = item?.name || "";
+      const artists = (item?.artists || []).map((a) => a.name).join(", ");
+      const album = item?.album?.name || "";
+      const durationMs = item?.duration_ms || 0;
+
+      // 2. Ensure lyrics are ready for current track
+      if (trackId && trackId !== currentTrackId) {
+        currentTrackId = trackId;
+        overlayWindow?.webContents.send("status:update", "Fetching lyrics…");
+        await ensureLyrics(trackId, { title, artists, album, durationMs });
+      }
+
+      // 3. Compute active lyric line
+      const lines = lyricsCache.get(trackId) || [];
+      const activeIndex = getActiveIndex(lines, progressMs);
+
+      // 4. Push updates to the renderer
+      overlayWindow?.webContents.send("lyrics:update", { lines, activeIndex });
+
+      overlayWindow?.webContents.send(
+        "status:update",
+        isPlaying ? "" : "Paused"
+      );
+    } catch (err) {
+      console.error("tick error", err);
+    }
+  }
+
+  tick();
+  setInterval(tick, 900); // repeat every 900ms
 }
 
 // App init

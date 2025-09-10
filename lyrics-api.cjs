@@ -8,16 +8,18 @@
  *
  * @returns {Promise<string|null>} Raw LRC text if successfully found, otherwise null
  */
-
-export async function fetchLyrics(track, artist, album, durationInSec) {
+async function fetchLyrics(track, artist, album, durationInSec) {
   try {
     // 1) Try get with all params
     const params = new URLSearchParams({
       track_name: track,
       artist_name: artist,
-      album_name: album,
       duration: String(Math.round(durationInSec)),
     });
+    if (album) {
+      params.set("album_name", album);
+    }
+
     let res = await fetch(`https://lrclib.net/api/get?${params}`);
     if (res.ok) {
       // parse JSON response body into a JS object
@@ -35,12 +37,13 @@ export async function fetchLyrics(track, artist, album, durationInSec) {
       `https://lrclib.net/api/search?${searchParams}`
     );
     if (!searchRes.ok) return null;
+
     const resultsList = await searchRes.json();
     if (!Array.isArray(resultsList) || resultsList.length === 0) {
       return null;
     }
 
-    // 3) Choose the best candidate: duration within 2s, and loose artist match
+    // 3) Pick the best candidate: duration within 2s, and loose artist match
     const dur = Math.round(durationInSec);
     const norm = (s) => s?.toLowerCase().trim() || ""; // normalize string
 
@@ -54,7 +57,7 @@ export async function fetchLyrics(track, artist, album, durationInSec) {
       }) || resultsList[0];
     if (!candidate?.id) return null;
 
-    // 4) Fetch by absolute id we retrieved using search
+    // 4) Fetch by id we retrieved using search
     res = await fetch(`https://lrclib.net/api/get/${candidate.id}`);
     if (!res.ok) return null;
 
@@ -76,13 +79,13 @@ export async function fetchLyrics(track, artist, album, durationInSec) {
  *     - timeMs: absolute time in milliseconds from the start of the track
  *     - text:   lyric line text at that timestamp
  */
-export function parseLRC(lrcText) {
+function parseLRC(lrcText) {
   if (!lrcText || typeof lrcText !== "string") return [];
 
   // split into lines
   const lines = lrcText.split(/\r?\n/);
   const metaLineRegex = /^\s*\[(ti|ar|al|by|offset):/i;
-  const timestampRegex = /\[(\d{1,2}):(\d{2})(?:\.(\d{1,2}))?\]/g;
+  const timestampRegex = /\[(\d{1,2}):(\d{2})(?:\.(\d{1,3}))?\]/g;
   const out = [];
 
   for (const line of lines) {
