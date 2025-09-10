@@ -1,6 +1,7 @@
 const { app, BrowserWindow, ipcMain, shell } = require("electron");
 const path = require("path");
 const crypto = require("crypto");
+const { fetchLyrics, parseLRC } = require("./lyrics-api");
 
 const fetch =
   global.fetch ||
@@ -12,19 +13,21 @@ const REDIRECT_URI = `${BACKEND}/callback`;
 const SCOPE =
   "user-read-private user-read-email user-read-currently-playing user-read-playback-state";
 
+let currentTrackId = null; // Spotify track's unique id of currently playing song
+const lyricsCache = new Map(); // trackId -> [{ timeMs, text }]
+const noLyricsCache = new Set(); // trackIds with no lyrics
+
 // ---------- PKCE helpers ----------
 // Creates a random string to be used as a code verifier
 function generateRandomString(length) {
   const chars =
     "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-  const crypto = require("crypto");
   const bytes = crypto.randomBytes(length);
   return Array.from(bytes, (x) => chars[x % chars.length]).join("");
 }
 
 // Hash the code verifier using SHA-256 algorithm + base64 url encode
 function sha256Base64Url(input) {
-  const crypto = require("crypto");
   const hash = crypto.createHash("sha256").update(input).digest();
   return hash
     .toString("base64")
@@ -130,8 +133,71 @@ ipcMain.on("open-external", (_event, url) => {
 
 // Send an IPC message from main to renderer via the "lyrics:update" channel,
 // passing { lines, activeIndex } as the payload
-overlayWindow.webContents.send("lyrics:update", { lines, activeIndex });
-overlayWindow.webContents.send("overlay:status", "Fetching lyrics…");
+// overlayWindow?.webContents.send("lyrics:update", { lines, activeIndex });
+
+/**
+ * Ensures we have parsed lyrics ready for the given trackId
+ * @param {string} trackId          Spotify's unique track id
+ * @param {Object} meta             Metadata about the track
+ * @param {string} meta.title       Track title
+ * @param {string} meta.artists     Comma separated artist names
+ * @param {string} [meta.album]     Album name (optional)
+ * @param {number} meta.durationMs  Track duration in ms
+ * @returns {Promise<void>}
+ */
+async function ensureLyrics(trackId, meta) {
+  if (!trackId) return;
+
+  // already have lyrics (or know it has none)
+  if (lyricsCache.has(trackId) || noLyricsCache.has(trackId)) return;
+
+  const syncedLyrics = await fetchLyrics(
+    meta.title,
+    meta.artists,
+    meta.album,
+    Math.round(meta.durationMs / 1000) // convert to sec for fetchLyrics
+  );
+
+  // if couldn't fetch lyrics, mark this track as having no lyrics
+  // and send a status message to renderer to display on the overlay
+  if (!syncedLyrics) {
+    noLyricsCache.add(trackId);
+    lyricsCache.set(trackId, [{ timeMs: 0, text: "" }]); // ensures UI clears
+    overlayWindow?.webContents.send("status:update", "No synced lyrics");
+    return;
+  }
+
+  // parse the lyric lines and store in our cache
+  const parsedLyrics = parseLRC(syncedLyrics);
+  lyricsCache.set(trackId, parsedLyrics);
+  overlayWindow?.webContents.send("status:update", ""); // clear UI
+}
+
+/**
+ * Gets the index of the lyric line that matches the current playback time.
+ *
+ * Returns -1 if no lyrics or if the progress is before the first lyric line
+ * Otherwise, returns the last line whose timestamp <= progressMs
+ *
+ * @param {Array<{timeMs: number, text: string}>} lines   Parsed lyric lines
+ * @param {number} progressMs                             Current playback pos in ms
+ * @returns {number}                                      Active lyric index or -1 if nothing should be shown
+ */
+function getActiveIndex(lines, progressMs) {
+  if (lines.length === 0) return -1; // no lyrics
+
+  // if the progressMs is before the first lyric line, return -1 so it doesn't display
+  // the first line too early
+  if (progressMs < lines[0].timeMs) return -1;
+
+  // find idx of the last lyric line whose timestamp <= progressMs
+  let i = 0; // start at first lyric line
+  // keep iterating until the next line is AFTER the current progressMs
+  while (i + 1 < lines.length && lines[i + 1].timeMs <= progressMs) {
+    i++;
+  }
+  return i;
+}
 
 // App init
 async function initApp() {

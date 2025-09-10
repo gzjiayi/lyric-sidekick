@@ -12,8 +12,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.on("lyrics:update", (_event, payload) => callback(payload)),
 
   // main → renderer communication
-  onStatus: (callback) => {
-    ipcRenderer.on("overlay:status", (_event, status_message) =>
+  onStatusUpdate: (callback) => {
+    ipcRenderer.on("status:update", (_event, status_message) =>
       callback(status_message)
     );
   },

@@ -1,3 +1,14 @@
+/**
+ * Fetches synced lyrics (LRC format text) from LRCLib for a given track
+ *
+ * @param {string} track          Track title
+ * @param {string} artist         Comma separated artist names
+ * @param {string} [album]        Album name (optional)
+ * @param {number} durationInSec  Track duration in seconds
+ *
+ * @returns {Promise<string|null>} Raw LRC text if successfully found, otherwise null
+ */
+
 export async function fetchLyrics(track, artist, album, durationInSec) {
   try {
     // 1) Try get with all params
@@ -55,8 +66,16 @@ export async function fetchLyrics(track, artist, album, durationInSec) {
   }
 }
 
-// Takes the LRC string (timestamped lyrics) and
-// Outputs an array of objects, each { time: number, text: string }
+/**
+ * Parses raw LRC (timestamped lyric) text into an array of timestamped lines
+ *
+ * @param {string} lrcText  Raw LRC text
+ *
+ * @returns {Array<{ timeMs: number, text: string }>}
+ *   Outputs an array of lyric line objects:
+ *     - timeMs: absolute time in milliseconds from the start of the track
+ *     - text:   lyric line text at that timestamp
+ */
 export function parseLRC(lrcText) {
   if (!lrcText || typeof lrcText !== "string") return [];
 
@@ -87,9 +106,9 @@ export function parseLRC(lrcText) {
       const mm = parseInt(m[1], 10) || 0; // convert minutes to integer
       const ss = parseInt(m[2], 10) || 0; // convert seconds to integer
       const frac = m[3] ? Number(`0.${m[3]}`) : 0; // turn it into decimal
-      const time = mm * 60 + ss + frac; // convert total to seconds
+      const timeMs = mm * 60_000 + ss * 1000 + Math.round(frac * 1000); // convert total to ms
 
-      if (Number.isFinite(time)) out.push({ time, text }); // push to output array
+      if (Number.isFinite(timeMs)) out.push({ timeMs, text }); // push to output array
     }
   }
 
@@ -97,6 +116,8 @@ export function parseLRC(lrcText) {
   // if a.time < b.time -> result is negative -> a comes before b
   // if a.time > b.time -> result is positive -> b comes before a
   // if equal, result is 0 -> keep original order
-  out.sort((a, b) => a.time - b.time);
+  out.sort((a, b) => a.timeMs - b.timeMs);
   return out;
 }
+
+module.exports = { fetchLyrics, parseLRC };

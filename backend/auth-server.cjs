@@ -199,6 +199,8 @@ app.get("/api/now-playing", async (req, res) => {
   }
 });
 
+
+
 app.listen(PORT, () => {
   console.log(`Auth server listening at http://127.0.0.1:${PORT}`);
 });
