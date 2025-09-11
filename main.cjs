@@ -97,7 +97,8 @@ async function createOverlayWindow() {
     frame: false,
     alwaysOnTop: true,
     resizable: true,
-    backgroundColor: "#000000",
+    transparent: true,
+    backgroundColor: "#00000000",
     show: false,
     webPreferences: {
       nodeIntegration: false,
@@ -108,7 +109,7 @@ async function createOverlayWindow() {
 
   // load html
   await overlayWindow.loadFile(path.join(__dirname, "frontend", "index.html"));
-  // win.webContents.openDevTools();
+  // overlayWindow.webContents.openDevTools();
 
   overlayWindow.once("ready-to-show", () => {
     overlayWindow.show();
@@ -214,6 +215,7 @@ async function startPlaybackLoop() {
           lines: [],
           activeIndex: -1,
         }); // send blank lyrics
+        lastIndexSent = null;
         return;
       }
 
@@ -241,28 +243,43 @@ async function startPlaybackLoop() {
           lines: [],
           activeIndex: -1,
         });
+        lastIndexSent = null;
         return;
       }
-      const progressMs = data.progress_ms ?? 0;
       const isPlaying = data.is_playing;
       const title = item?.name || "";
       const artists = (item?.artists || []).map((a) => a.name).join(", ");
       const album = item?.album?.name || "";
       const durationMs = item?.duration_ms || 0;
 
+      const baseProgress = data.progress_ms ?? 0; // what Spotify reported
+      const fetchAt = Date.now(); // when we got this response
+
       // 2. Ensure lyrics are ready for current track
       if (trackId && trackId !== currentTrackId) {
         currentTrackId = trackId;
+        lastIndexSent = null;
         overlayWindow?.webContents.send("status:update", "Fetching lyrics…");
         await ensureLyrics(trackId, { title, artists, album, durationMs });
       }
 
-      // 3. Compute active lyric line
-      const lines = lyricsCache.get(trackId) || [];
-      const activeIndex = getActiveIndex(lines, progressMs);
+      // 3. Compute effective progress
+      const effectiveProgress = isPlaying
+        ? baseProgress + (Date.now() - fetchAt) // advance by network delay
+        : baseProgress;
 
-      // 4. Push updates to the renderer
-      overlayWindow?.webContents.send("lyrics:update", { lines, activeIndex });
+      // 4. Compute active lyric line
+      const lines = lyricsCache.get(trackId) || [];
+      const activeIndex = getActiveIndex(lines, effectiveProgress);
+
+      // 5. Push updates to the renderer. Only send if the line actually changed
+      if (activeIndex !== lastIndexSent) {
+        overlayWindow?.webContents.send("lyrics:update", {
+          lines,
+          activeIndex,
+        });
+        lastIndexSent = activeIndex;
+      }
 
       overlayWindow?.webContents.send(
         "status:update",
@@ -273,8 +290,10 @@ async function startPlaybackLoop() {
     }
   }
 
+  let lastIndexSent = null;
+
   tick();
-  setInterval(tick, 900); // repeat every 900ms
+  setInterval(tick, 300); // repeat every 300ms
 }
 
 // App init

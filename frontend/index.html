@@ -14,15 +14,16 @@
         form-action 'self';
       "
     />
-    <title>Lyric Sidekick</title>
+    <title></title>
     <link rel="stylesheet" href="style.css" />
     <style>
       /* minimal defaults so you see something even without style.css */
       html,
       body {
         margin: 0;
-        background: #000;
+        background: transparent;
         color: #fff;
+        overflow: hidden;
         font: 22px/1.4 system-ui;
       }
       #lyric {
@@ -41,11 +42,23 @@
         font-size: 12px;
         opacity: 0.7;
       }
+      .drag {
+        -webkit-app-region: drag;
+      }
+      .no-drag,
+      button,
+      a,
+      input,
+      textarea {
+        -webkit-app-region: no-drag;
+      }
     </style>
   </head>
   <body>
-    <div id="lyric">Overlay ready…</div>
-    <div id="status"></div>
+    <div id="overlay" class="drag">
+      <div id="lyric">Overlay ready…</div>
+      <div id="status"></div>
+    </div>
     <script src="renderer.js"></script>
   </body>
 </html>
