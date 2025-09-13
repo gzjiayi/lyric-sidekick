@@ -46,7 +46,7 @@ You’ll need a [Spotify Developer App](https://developer.spotify.com/dashboard/
 ### 3. Run the backend
 ```bash
 cd backend
-node auth-server.js
+node auth-server.cjs
 ```
 ### 4. Start the Electron app
 ```bash
@@ -55,7 +55,7 @@ npm start
 ---
 ## Limitations
 - You’ll need your own **Spotify Developer account** and app to get a `CLIENT_ID` and set a redirect URI
-- The backend isn’t hosted anywhere. You have to run `auth-server.js` locally for login and playback to work
+- The backend isn’t hosted anywhere. You have to run `auth-server.cjs` locally for login and playback to work
 - There’s no installer yet. The app runs from `npm start`
 
 ---
@@ -77,5 +77,6 @@ npm start
 
 ## License & Copyright
 This project is licensed under the [MIT License](./LICENSE). 
+
 
 
