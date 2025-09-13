@@ -45,6 +45,7 @@ You’ll need a [Spotify Developer App](https://developer.spotify.com/dashboard/
  to get your own Client ID and register the redirect URI above.
 ### 3. Run the backend
 ```bash
+cd backend
 node auth-server.js
 ```
 ### 4. Start the Electron app
@@ -76,4 +77,5 @@ npm start
 
 ## License & Copyright
 This project is licensed under the [MIT License](./LICENSE). 
+
 
