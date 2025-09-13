@@ -16,48 +16,16 @@
     />
     <title></title>
     <link rel="stylesheet" href="style.css" />
-    <style>
-      /* minimal defaults so you see something even without style.css */
-      html,
-      body {
-        margin: 0;
-        background: transparent;
-        color: #fff;
-        overflow: hidden;
-        font: 22px/1.4 system-ui;
-      }
-      #lyric {
-        padding: 10px 16px;
-        text-align: center;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-      }
-      #status {
-        position: absolute;
-        bottom: 2px;
-        left: 0;
-        right: 0;
-        text-align: center;
-        font-size: 12px;
-        opacity: 0.7;
-      }
-      .drag {
-        -webkit-app-region: drag;
-      }
-      .no-drag,
-      button,
-      a,
-      input,
-      textarea {
-        -webkit-app-region: no-drag;
-      }
-    </style>
   </head>
   <body>
-    <div id="overlay" class="drag">
-      <div id="lyric">Overlay ready…</div>
-      <div id="status"></div>
+    <div id="overlay">
+      <button id="close-btn" class="close-btn no-drag" aria-label="Close">
+        x
+      </button>
+      <div class="content">
+        <div id="lyric"></div>
+        <div id="status"></div>
+      </div>
     </div>
     <script src="renderer.js"></script>
   </body>

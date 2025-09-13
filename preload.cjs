@@ -1,9 +1,6 @@
 const { contextBridge, ipcRenderer } = require("electron");
 
 contextBridge.exposeInMainWorld("electronAPI", {
-  // renderer -> main communication
-  openExternal: (url) => ipcRenderer.send("open-external", url),
-
   // main → renderer communication
   // Defining a function the renderer can call: window.electronAPI.onLyricsUpdate(callback)
   // When the renderer calls it, it starts listening on the "lyrics:update" channel
@@ -17,4 +14,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
       callback(status_message)
     );
   },
+
+  // renderer -> main communication
+  // when closeOverlay is invoked by renderer, an ipc msg will be sent to main on the "overlay:close" channel
+  closeOverlay: () => ipcRenderer.send("overlay:close"),
 });

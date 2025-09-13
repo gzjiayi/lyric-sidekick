@@ -1,5 +1,4 @@
 const express = require("express");
-const cookieParser = require("cookie-parser");
 const axios = require("axios");
 const dotenv = require("dotenv");
 dotenv.config();
@@ -13,11 +12,12 @@ const CLIENT_ID = process.env.CLIENT_ID;
 const app = express();
 const PORT = 8888;
 
-app.use(cookieParser());
 app.use(express.json());
 
-const authStore = new Map(); // state -> { code_verifier, tokens: null | {access_token, ...} }
+// state -> { code_verifier, tokens: null | {access_token, ...} }
+const authStore = new Map();
 
+// ---------- Token helpers ----------
 async function getAccessTokenOrThrow() {
   const t = app.locals.tokens;
   if (!t?.access_token) {
@@ -69,6 +69,7 @@ async function refreshAccessToken() {
   }
 }
 
+// --------- Routes ----------
 app.get("/", (req, res) => {
   res.send("Auth server running...");
 });
@@ -85,6 +86,7 @@ app.post("/store-code-verifier", (req, res) => {
   res.sendStatus(200);
 });
 
+// OAuth redirect target (Spotify -> us)
 // runs when Spotify redirects back to our Express server using an HTTP GET after user logs in
 app.get("/callback", async (req, res) => {
   const { code, state } = req.query;
@@ -127,18 +129,13 @@ app.get("/callback", async (req, res) => {
     };
     authStore.delete(state);
 
+    // close the browser tab after success
     res.status(200).send(`
       <!doctype html>
       <html>
-        <head>
-          <meta charset="utf-8" />
-          <title>Success</title>
-        </head>
         <body>
           <script>
-            // Try to close the tab (may be blocked if not user-initiated)
             window.close();
-            // Fallback: replace with about:blank so at least it's empty
             setTimeout(() => { window.location.replace('about:blank'); }, 500);
           </script>
         </body>
@@ -157,6 +154,25 @@ app.get("/tokens", (req, res) => {
     return res.status(404).json({ error: "Tokens not found" });
   }
   res.json(app.locals.tokens);
+});
+
+app.get("/api/now-playing", async (req, res) => {
+  try {
+    const data = await getCurrentlyPlaying();
+
+    if (data) {
+      return res.status(200).json(data);
+    } else {
+      // nothing playing
+      return res.status(204).send();
+    }
+  } catch (err) {
+    console.error("Route error:", err.message);
+    const isAuth = err.message?.includes("No access token");
+    return res
+      .status(isAuth ? 401 : 500)
+      .json({ error: isAuth ? "Not logged in" : "Server error" });
+  }
 });
 
 async function getCurrentlyPlaying() {
@@ -179,27 +195,6 @@ async function getCurrentlyPlaying() {
     return null;
   }
 }
-
-app.get("/api/now-playing", async (req, res) => {
-  try {
-    const data = await getCurrentlyPlaying();
-
-    if (data) {
-      return res.status(200).json(data);
-    } else {
-      // nothing playing
-      return res.status(204).send();
-    }
-  } catch (err) {
-    console.error("Route error:", err.message);
-    const isAuth = err.message?.includes("No access token");
-    return res
-      .status(isAuth ? 401 : 500)
-      .json({ error: isAuth ? "Not logged in" : "Server error" });
-  }
-});
-
-
 
 app.listen(PORT, () => {
   console.log(`Auth server listening at http://127.0.0.1:${PORT}`);

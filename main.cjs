@@ -2,6 +2,7 @@ const { app, BrowserWindow, ipcMain, shell } = require("electron");
 const path = require("path");
 const crypto = require("crypto");
 const { fetchLyrics, parseLRC } = require("./lyrics-api.cjs");
+const { screen } = require("electron");
 
 const fetch =
   global.fetch ||
@@ -91,13 +92,20 @@ async function startSpotifyLoginHeadless() {
 // Loads the index.html web page into a BrowserWindow instance
 let overlayWindow;
 async function createOverlayWindow() {
+  const primary = screen.getPrimaryDisplay();
+  const { width, height } = primary.workAreaSize;
+  const winWidth = 500;
+  const winHeight = 70;
+
   overlayWindow = new BrowserWindow({
-    width: 550,
-    height: 70,
+    width: winWidth,
+    height: winHeight,
+    x: Math.round((width - winWidth) / 2), // center horizontally
+    y: Math.round(height - winHeight - 40), // 40px margin from bottom
     frame: false,
     alwaysOnTop: true,
-    resizable: true,
     transparent: true,
+    resizable: false,
     backgroundColor: "#00000000",
     show: false,
     webPreferences: {
@@ -109,7 +117,6 @@ async function createOverlayWindow() {
 
   // load html
   await overlayWindow.loadFile(path.join(__dirname, "frontend", "index.html"));
-  // overlayWindow.webContents.openDevTools();
 
   overlayWindow.once("ready-to-show", () => {
     overlayWindow.show();
@@ -122,19 +129,13 @@ async function createOverlayWindow() {
   });
 }
 
-// IPC bridge: renderer -> main to open system browser
-ipcMain.on("open-external", (_event, url) => {
-  try {
-    new URL(url); // basic validation
-    shell.openExternal(url); // opens default system browser
-  } catch (e) {
-    console.error("Invalid URL for open-external:", url);
+// renderer -> main: handle overlay close request
+ipcMain.on("overlay:close", () => {
+  if (overlayWindow) {
+    overlayWindow.close();
+    overlayWindow = null;
   }
 });
-
-// Send an IPC message from main to renderer via the "lyrics:update" channel,
-// passing { lines, activeIndex } as the payload
-// overlayWindow?.webContents.send("lyrics:update", { lines, activeIndex });
 
 /**
  * Ensures we have parsed lyrics ready for the given trackId
@@ -200,10 +201,15 @@ function getActiveIndex(lines, progressMs) {
   return i;
 }
 
-// Keeps overlay synced to Spotify
+/**
+ * Polling loop that keeps the overlay window synced to Spotify playback
+ *  - Polls /api/now-playing every 300ms
+ *  - Ensures lyrics are fetched and cached for the curr track
+ *  - Sends updated lyrics and status messages to the renderer for overlay
+ */
 async function startPlaybackLoop() {
   async function tick() {
-    // 1. Check what's playing
+    // 1) Check what's playing
     try {
       const res = await fetch(BACKEND + "/api/now-playing");
       if (res.status === 204 || res.status === 404) {
@@ -255,7 +261,7 @@ async function startPlaybackLoop() {
       const baseProgress = data.progress_ms ?? 0; // what Spotify reported
       const fetchAt = Date.now(); // when we got this response
 
-      // 2. Ensure lyrics are ready for current track
+      // 2) Ensure lyrics are ready for current track
       if (trackId && trackId !== currentTrackId) {
         currentTrackId = trackId;
         lastIndexSent = null;
@@ -263,16 +269,16 @@ async function startPlaybackLoop() {
         await ensureLyrics(trackId, { title, artists, album, durationMs });
       }
 
-      // 3. Compute effective progress
+      // 3) Compute effective progress
       const effectiveProgress = isPlaying
         ? baseProgress + (Date.now() - fetchAt) // advance by network delay
         : baseProgress;
 
-      // 4. Compute active lyric line
+      // 4) Compute active lyric line
       const lines = lyricsCache.get(trackId) || [];
       const activeIndex = getActiveIndex(lines, effectiveProgress);
 
-      // 5. Push updates to the renderer. Only send if the line actually changed
+      // 5) Push updates to the renderer. Only send if the line actually changed
       if (activeIndex !== lastIndexSent) {
         overlayWindow?.webContents.send("lyrics:update", {
           lines,
@@ -296,9 +302,9 @@ async function startPlaybackLoop() {
   setInterval(tick, 300); // repeat every 300ms
 }
 
-// App init
+// Initialize the app
 async function initApp() {
-  // check tokens
+  // check if Spotify tokens are available
   let haveTokens = false;
   try {
     const res = await fetch(`${BACKEND}/tokens`);
@@ -311,6 +317,7 @@ async function initApp() {
     haveTokens = tokens ? true : false;
   }
 
+  // if authorized, create overlay window and start playback loop
   if (haveTokens) {
     await createOverlayWindow();
     startPlaybackLoop();
@@ -322,14 +329,6 @@ async function initApp() {
 
 app.whenReady().then(() => {
   initApp();
-
-  // On macOS, recreate a window when the app is activated (e.x. clicking the dock icon)
-  // and there are no other open windows
-  // app.on("activate", () => {
-  //   if (BrowserWindow.getAllWindows().length === 0) {
-  //     createWindow();
-  //   }
-  // });
 });
 
 // Quit the application when all windows are closed, except on macOS
